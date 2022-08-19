@@ -16,4 +16,15 @@ CHIP RAM16K {
 
     PARTS:
     // Put your code here:
+    // First we pick up a small ram cell
+    DMux4Way(in = load, sel = address[12..13], a = load0, b = load1, c = load2, d = load3);
+
+    // Second we pick up an address to store the in data
+    RAM4K(in = in, load = load0, address = address[0..11], out = out0);
+    RAM4K(in = in, load = load1, address = address[0..11], out = out1);
+    RAM4K(in = in, load = load2, address = address[0..11], out = out2);
+    RAM4K(in = in, load = load3, address = address[0..11], out = out3);
+
+    // Finally we output the stored data according to address[3..5]
+    Mux4Way16(a = out0, b = out1, c = out2, d = out3, sel = address[12..13], out = out);
 }
