@@ -4,9 +4,33 @@
 // File name: projects/04/Mult.asm
 
 // Multiplies R0 and R1 and stores the result in R2.
+// R2 = R0 * R1
 // (R0, R1, R2 refer to RAM[0], RAM[1], and RAM[2], respectively.)
 //
 // This program only needs to handle arguments that satisfy
 // R0 >= 0, R1 >= 0, and R0*R1 < 32768.
 
 // Put your code here.
+@R2
+M = 0      // Clear RAM[2] to store result
+
+@R0
+D = M      // Read loop count
+
+@14
+D; JEQ     // Loop finish?
+
+@R0
+M = M - 1  // Loop count --
+
+@R1
+D = M
+
+@R2
+M = M + D
+
+@2
+0; JMP
+
+@14
+0; JMP
