@@ -14,10 +14,11 @@
 @R2
 M = 0      // Clear RAM[2] to store result
 
+(READ_COUNT)
 @R0
 D = M      // Read loop count
 
-@14
+@END
 D; JEQ     // Loop finish?
 
 @R0
@@ -29,8 +30,9 @@ D = M
 @R2
 M = M + D
 
-@2
+@READ_COUNT
 0; JMP
 
-@14
+(END)
+@END
 0; JMP
