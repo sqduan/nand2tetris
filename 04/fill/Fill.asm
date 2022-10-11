@@ -32,11 +32,6 @@
     M = 0
     @filled
     M = 0
-    
-    @total_row
-    M = 512
-    @total_col
-    M = 32
 
 (KEYBOARD_CHECK)
     @KBD
