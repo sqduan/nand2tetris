@@ -40,4 +40,34 @@ CHIP CPU {
 
     PARTS:
     // Put your code here:
+
+    // Let's first deal with the A register, the input of A register comes from
+    // three parts: the old A(dA), the constant in instruction[1..15] and the output
+    // of ALU, thus we need 2 mux to select the input of register A.
+    Mux16(a = dA, b = aluOut, sel = instruction[10], out = inA1);
+    // Deal with A instruction, for the A instruction, it loads a constant into
+    // Register A
+    Mux16(a[0] = 0, a[1..15] = instruction[1..15], b = inA1, sel = instruction[0], out = inA);
+    Register(in = inA, load = true, out = A, out = dA);    // Register A
+
+    // Then we deal with the D register, the value of D register comes from two pars:
+    // the old D(dD) and the aluOut
+    Mux16(a = dD, b = aluOut, sel = instruction[11], out = inD);
+    Register(in = inD, load = true, out = D, out = dD);    // Register D
+
+    // Also, we use instruction[13] to determine whether we use A or inM as our second opt number
+    Mux16(a = A, b = inM, sel = instruction[3], out = AorM);
+
+    // Now we get all the input for the ALU, we will create an ALU to execute arithmetic operation to
+    // the input opt number, the operation defined in instruction[4..9]
+    ALU(x = D, y = AorM, zx = instruction[4], nx = instruction[5], zy = instruction[6],
+                      ny = instruction[7], f  = instruction[8], no = instruction[9],
+                      out = aluOut, zr = zr, ng = ng);
+
+    // Check if the result needs to be stored in RAM[A] by instruction[12]
+    Mux(a = false, b = true, sel = instruction[12], out = writeM);
+
+    // Jump check
+    PC(in = , load = , inc = , reset = reset, out =);
+    
 }
