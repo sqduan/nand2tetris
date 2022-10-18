@@ -4,10 +4,10 @@
 // File name: projects/05/CPU.hdl
 
 /**
- * The Hack CPU (Central Processing unit), consisting of an ALU,
- * two registers named A and D, and a program counter named PC.
- * The CPU is designed to fetch and execute instructions written in 
- * the Hack machine language. In particular, functions as follows:
+ * The Hack CPU, consisting of an ALU,two registers named A and D,
+ * and a program counter named PC. The CPU is designed to fetch and execute
+ * instructions written in the Hack machine language. 
+ * In particular, functions as follows:
  * Executes the inputted instruction according to the Hack machine 
  * language specification. The D and A in the language specification
  * refer to CPU-resident registers, while M refers to the external
@@ -34,40 +34,74 @@ CHIP CPU {
                          // the current program (reset==0).
 
     OUT outM[16],        // M value output
-        writeM,          // Write to M? 
+        writeM,          // Write to M?
         addressM[15],    // Address in data memory (of M)
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
-
+    // Part1: deal with A and D registers
     // Let's first deal with the A register, the input of A register comes from
-    // three parts: the old A(dA), the constant in instruction[1..15] and the output
-    // of ALU, thus we need 2 mux to select the input of register A.
-    Mux16(a = dA, b = aluOut, sel = instruction[10], out = inA1);
-    // Deal with A instruction, for the A instruction, it loads a constant into
-    // Register A
-    Mux16(a[0] = 0, a[1..15] = instruction[1..15], b = inA1, sel = instruction[0], out = inA);
-    Register(in = inA, load = true, out = A, out = dA);    // Register A
+    // two parts: the constant in instruction[1..15] and the output
+    // of ALU, thus we need a mux to select the input of register A.
+    Mux16(a[0..14] = instruction[0..14], a[15] = false, b = aluOut, sel = instruction[15], out = inA);
 
-    // Then we deal with the D register, the value of D register comes from two pars:
-    // the old D(dD) and the aluOut
-    Mux16(a = dD, b = aluOut, sel = instruction[11], out = inD);
-    Register(in = inD, load = true, out = D, out = dD);    // Register D
+    // If instruction is an A-type instruction or load to A bit is true, then we load A
+    Not(in = instruction[15], out = ATypeInstruction);
+    Or(a = ATypeInstruction, b = instruction[5], out = loadA);
+    ARegister(in = inA, load = loadA, out = A, out[0..14] = addressM);    // Register A
 
-    // Also, we use instruction[13] to determine whether we use A or inM as our second opt number
-    Mux16(a = A, b = inM, sel = instruction[3], out = AorM);
+    // Then we deal with the D register, the value of D register comes from the aluOut
+    And(a = instruction[15], b = instruction[4], out = loadD);
+    DRegister(in = aluOut, load = loadD, out = D);                        // Register D
+
+    // Check whether the result should be stored in memory
+    And(a = instruction[15], b = instruction[3], out = writeM);
+
+    // Part2: Arithmetic logic dealing
+    // we use instruction[12] to determine whether we use A or inM as our second opt number
+    Mux16(a = A, b = inM, sel = instruction[12], out = AorM);
 
     // Now we get all the input for the ALU, we will create an ALU to execute arithmetic operation to
     // the input opt number, the operation defined in instruction[4..9]
-    ALU(x = D, y = AorM, zx = instruction[4], nx = instruction[5], zy = instruction[6],
-                      ny = instruction[7], f  = instruction[8], no = instruction[9],
-                      out = aluOut, zr = zr, ng = ng);
+    ALU(x = D, y = AorM, zx = instruction[11], nx = instruction[10], zy = instruction[9],
+                      ny = instruction[8], f  = instruction[7], no = instruction[6],
+                      out = aluOut, out = outM, zr = zr, ng = ng);
 
-    // Check if the result needs to be stored in RAM[A] by instruction[12]
-    Mux(a = false, b = true, sel = instruction[12], out = writeM);
+    // Recode another two state of the ALU's output
+    Not(in = zr, out = notZr);
+    Not(in = ng, out = notNg);
+    And(a = notZr, b = notNg, out = ps);    // Not zero, not negative, a positive number
 
-    // Jump check
-    PC(in = , load = , inc = , reset = reset, out =);
+    // Part3: conditional jump
+    // The conditions of PC is quite complex, let's discuss them one by one
+    // 1. The reset signal comes from outsize
+    // 2. If the instruction is a C-type instruction and contains jump, load is true, and
+    //    the jump dest is A. After calculation, the jump control is
+    //    jmp = (j3 & ps) Nand(j1, j2) | (j2 & zr) Nand(j1, j3) | (j1 & ng) Nand(j2, j3) | j1j2j3
+    // 3. Otherwise do inc
+    Nand(a = instruction[2], b = instruction[1], out = nandJ1J2);
+    Nand(a = instruction[2], b = instruction[0], out = nandJ1J3);
+    Nand(a = instruction[1], b = instruction[0], out = nandJ2J3);
     
+    And(a = instruction[0], b = ps, out = greaterZero);    // aluOut >  0
+    And(a = instruction[1], b = zr, out = equalZero);      // aluOut == 0
+    And(a = instruction[2], b = ng, out = lessZero);       // aluOut <  0
+
+    And(a = greaterZero, b = nandJ1J2, out = greaterJmp);  // JMP because aluOut >  0
+    And(a = equalZero,   b = nandJ1J3, out = equalJmp);    // JMP because aluOut == 0
+    And(a = lessZero,    b = nandJ2J3, out = lessJmp);     // JMP because aluOut <  0
+
+    // Unconditional jump
+    And(a = instruction[2], b = instruction[1], out = andJ1J2);
+    And(a = instruction[2], b = instruction[0], out = andJ1J3);
+    And(a = andJ1J2, b = andJ1J3, out = unconditionalJmp);
+
+    // Now we combine all the jmp condition and get the final jmp control signal
+    Or(a = greaterJmp, b = equalJmp,         out = jmp1);
+    Or(a = lessJmp,    b = unconditionalJmp, out = jmp2);
+    Or(a = jmp1,       b = jmp2,             out = jmp3);
+    And(a = jmp3,      b = instruction[15],  out = jmp);   // Only C-Type instruction can jmp 
+
+    PC(in = A, load = jmp, inc = true, reset = reset, out[0..14] = pc);
+
 }
